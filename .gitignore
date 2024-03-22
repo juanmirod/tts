@@ -1,0 +1,5 @@
+.env
+venv
+tmp/*.mp3
+tmp/chunks/*.mp3
+__pycache__
