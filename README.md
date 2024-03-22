@@ -1,6 +1,6 @@
-# TTS Whisper
+# TTS_CLI
 
-TTS Whisper is a text-to-speech (TTS) script that allows you to convert text into spoken words using various TTS engines.
+TTS_CLI is a text-to-speech (TTS) script that allows you to convert text into spoken words using various TTS engines.
 
 ## Installation
 
