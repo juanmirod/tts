@@ -7,7 +7,7 @@ TTS_CLI is a text-to-speech (TTS) script that allows you to convert text into sp
 1. Clone the repository:
 
 ```shell
-git clone https://github.com/juanmirod/tts-whisper.git
+git clone https://github.com/juanmirod/tts.git
 ```
 
 2. Navigate to the project directory:
@@ -38,15 +38,13 @@ cp .env.example .env
 
 ## Usage
 
-To use TTS Whisper:
-
 tts is a command line command, you can run -h for help:
 
 ```shell
 python -m tts.tts -h
 ```
 
-Run it with the sample txt file and the default voice:
+Run it with the sample txt file and the default voice in OpenAI tts API:
 
 ```shell
 python -m tts.tts sample.txt
