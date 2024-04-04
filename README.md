@@ -13,7 +13,7 @@ git clone https://github.com/juanmirod/tts.git
 2. Navigate to the project directory:
 
 ```shell
-cd tts-whisper
+cd tts
 ```
 
 3. Create and activate a virtual environment:
