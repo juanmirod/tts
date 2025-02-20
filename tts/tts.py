@@ -5,9 +5,13 @@ from pydub import AudioSegment
 from openai import OpenAI
 from dotenv import load_dotenv
 from .text_parser import parse_markdown, chunk_text
+import importlib.util
+import subprocess
+import sys
+import os
+import numpy as np
 
 load_dotenv()
-
 
 def openai_tts(txt, speech_file_path=None, voice='nova', index=0):
     if speech_file_path is None:
@@ -24,6 +28,57 @@ def google_tts(txt, lang='en', voice='co.uk', index=0):
     filename = f"tmp/chunks/tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{index}.mp3"
     tts.save(filename)
     return filename
+
+def check_install_dependencies():
+    missing = []
+    for package in ['torch', 'transformers', 'scipy']:
+        if importlib.util.find_spec(package) is None:
+            missing.append(package)
+    
+    if missing:
+        print(f"Installing required dependencies for local TTS: {', '.join(missing)}")
+        try:
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install'] + missing)
+            return True
+        except subprocess.CalledProcessError:
+            print("Failed to install dependencies. Please install manually:")
+            print(f"pip install {' '.join(missing)}")
+            return False
+    return True
+
+def local_tts(txt, model_name, index=0):
+    wav_filename = f"tmp/chunks/tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{index}.wav"
+    mp3_filename = f"tmp/chunks/tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{index}.mp3"
+    
+    if not check_install_dependencies():
+        raise RuntimeError("Required dependencies not available for local TTS")
+    
+    try:
+        from transformers import pipeline
+        from scipy.io import wavfile
+        synthesizer = pipeline("text-to-speech", model=model_name)
+        result = synthesizer(txt)
+        
+        # The audio data comes as normalized float32 (-1 to 1)
+        audio_array = np.frombuffer(result["audio"], dtype=np.float32)
+        
+        # Convert to int16 format (required for wav)
+        audio_int16 = (audio_array * 32767).astype(np.int16)
+        
+        # Save as WAV using the correct sampling rate from the model output
+        wavfile.write(wav_filename, result["sampling_rate"], audio_int16)
+        
+        # Convert WAV to MP3
+        audio = AudioSegment.from_wav(wav_filename)
+        audio.export(mp3_filename, format="mp3")
+        
+        # Clean up temporary WAV file
+        os.remove(wav_filename)
+        
+        return mp3_filename
+    except Exception as e:
+        print(f"Error using local model: {str(e)}")
+        raise
 
 def main():
     # Create the arguments parser
@@ -47,6 +102,11 @@ def main():
     parser.add_argument('-l', '--language', type=str,
                         default='en',
                         help='The language to use with google tts. Defaults to "en".')
+    parser.add_argument('--local-model', action='store_true',
+                      help='Use a local HuggingFace model for TTS.')
+    parser.add_argument('--model-name', type=str,
+                      default='facebook/mms-tts-eng',
+                      help='HuggingFace model name to use for local TTS. Default: facebook/mms-tts-eng')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -63,7 +123,9 @@ def main():
         args.output = args.output.replace(".mp3", f"_{args.voice}.mp3")
         for chunk in chunks:
             print(f"Processing chunk {index} of {len(chunks)}, please wait...")
-            if args.google_tts:
+            if args.local_model:
+                chunk_file_path = local_tts(chunk, args.model_name, index)
+            elif args.google_tts:
                 if args.voice == 'nova':
                     args.voice = 'co.uk'
                 chunk_file_path = google_tts(chunk, voice=args.voice, index=index, lang=args.language)
