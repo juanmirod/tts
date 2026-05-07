@@ -5,11 +5,13 @@ from pydub import AudioSegment
 from openai import OpenAI
 from dotenv import load_dotenv
 from .text_parser import parse_markdown, chunk_text
+from .models import HuggingFaceModelManager
 import importlib.util
 import subprocess
 import sys
 import os
 import numpy as np
+import requests
 
 load_dotenv()
 
@@ -80,14 +82,60 @@ def local_tts(txt, model_name, index=0):
         print(f"Error using local model: {str(e)}")
         raise
 
+def list_hf_models(query=None, limit=20):
+    """
+    List or search for available HuggingFace TTS models.
+    
+    Args:
+        query: Optional search query to filter models
+        limit: Maximum number of models to display
+    """
+    try:
+        if query:
+            print(f"\nSearching for HuggingFace TTS models matching '{query}'...\n")
+            models = HuggingFaceModelManager.search_models(query=query, limit=limit)
+        else:
+            print(f"\nFetching top {limit} HuggingFace TTS models...\n")
+            models = HuggingFaceModelManager.list_tts_models(limit=limit)
+        
+        if models:
+            table = HuggingFaceModelManager.format_models_table(models)
+            print(table)
+            print(f"\nFound {len(models)} model(s).")
+            print(f"\nTo use a model, run:")
+            print(f"  python -m tts.tts -hf --hf-model <model_id> <input_file>")
+            print(f"\nExample:")
+            if models:
+                print(f"  python -m tts.tts -hf --hf-model {models[0]['id']} sample.txt")
+        else:
+            print("No TTS models found.")
+            if query:
+                print(f"Try a different search query.")
+    
+    except requests.RequestException as e:
+        print(f"Error fetching models from HuggingFace: {str(e)}")
+        print("Please check your internet connection and try again.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        sys.exit(1)
+
 def main():
     # Create the arguments parser
     default_output_file = f"tmp/tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
     parser = argparse.ArgumentParser(
         description="Takes a markdown file and returns an mp3 file with the tts audio transcription.")
+    
+    # Add subcommands/special commands
+    parser.add_argument('--list-hf-models', action='store_true',
+                        help='List available HuggingFace TTS models and exit.')
+    parser.add_argument('--search-hf-models', type=str, metavar='QUERY',
+                        help='Search for HuggingFace TTS models by keyword and exit.')
+    
     parser.add_argument(
         'input_file',
         type=str,
+        nargs='?',
         help='The input file to process.')
     parser.add_argument('-v', '--voice', type=str,
                         default='nova',
@@ -110,6 +158,20 @@ def main():
 
     # Parse the arguments
     args = parser.parse_args()
+    
+    # Handle special commands
+    if args.list_hf_models:
+        list_hf_models()
+        sys.exit(0)
+    
+    if args.search_hf_models:
+        list_hf_models(query=args.search_hf_models)
+        sys.exit(0)
+    
+    # Require input file for normal operation
+    if not args.input_file:
+        parser.print_help()
+        sys.exit(1)
 
     with open(args.input_file, 'r') as f:
         text = f.read()
