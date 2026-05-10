@@ -6,6 +6,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from .text_parser import parse_markdown, chunk_text
 from .models import HuggingFaceModelManager
+from huggingface_hub.utils import HfHubHTTPError
 import importlib.util
 import subprocess
 import sys
@@ -90,13 +91,14 @@ def list_hf_models(query=None, limit=20):
         query: Optional search query to filter models
         limit: Maximum number of models to display
     """
+    manager = HuggingFaceModelManager()
     try:
         if query:
             print(f"\nSearching for HuggingFace TTS models matching '{query}'...\n")
-            models = HuggingFaceModelManager.search_models(query=query, limit=limit)
+            models = manager.search_models(query=query, limit=limit)
         else:
             print(f"\nFetching top {limit} HuggingFace TTS models...\n")
-            models = HuggingFaceModelManager.list_tts_models(limit=limit)
+            models = manager.list_tts_models(limit=limit)
         
         if models:
             table = HuggingFaceModelManager.format_models_table(models)
@@ -112,7 +114,7 @@ def list_hf_models(query=None, limit=20):
             if query:
                 print(f"Try a different search query.")
     
-    except requests.RequestException as e:
+    except HfHubHTTPError as e:
         print(f"Error fetching models from HuggingFace: {str(e)}")
         print("Please check your internet connection and try again.")
         sys.exit(1)
