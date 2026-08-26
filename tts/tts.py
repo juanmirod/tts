@@ -6,6 +6,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from .text_parser import parse_markdown, chunk_text
 from .models import HuggingFaceModelManager
+from .openrouter import openrouter_tts, model_voices, resolve_voice
 from huggingface_hub.utils import HfHubHTTPError
 import importlib.util
 import subprocess
@@ -141,7 +142,7 @@ def main():
         help='The input file to process.')
     parser.add_argument('-v', '--voice', type=str,
                         default='nova',
-                        help='The voice. Valid values for openAI: nova, shimmer, echo, onyx, fable, alloy. Defaults to "nova".')
+                        help='The voice. For OpenAI: nova, shimmer, echo, onyx, fable, alloy. For OpenRouter: any voice of the --model catalog (see models/openrouter.json). Defaults to "nova" (OpenAI) or the model default voice (OpenRouter).')
     parser.add_argument('-o', '--output', type=str,
                         default=default_output_file,
                         help='The output file to write to. Defaults to "tmp/tts_yyyymmdd_hhmmss.mp3".')
@@ -149,6 +150,11 @@ def main():
                         help='If true, it will output what would be send to the tts. Defaults to false.')
     parser.add_argument('-g', '--google-tts', action='store_true',
                         help='Use google tts (free but more robotic, you have to specify the language).')
+    parser.add_argument('-or', '--openrouter', action='store_true',
+                        help='Use OpenRouter TTS (any model from models/openrouter.json).')
+    parser.add_argument('--model', type=str,
+                        default='kokoro',
+                        help='OpenRouter TTS model slug (e.g. kokoro, gemini-flash, aura-2). Defaults to "kokoro".')
     parser.add_argument('-l', '--language', type=str,
                         default='en',
                         help='The language to use with google tts. Defaults to "en".')
@@ -193,6 +199,11 @@ def main():
                 if args.voice == 'nova':
                     args.voice = 'co.uk'
                 chunk_file_path = google_tts(chunk, voice=args.voice, index=index, lang=args.language)
+            elif args.openrouter:
+                args.voice = resolve_voice(args.model, args.voice)
+                chunk_file_path = openrouter_tts(
+                    txt=chunk, model=args.model, voice=args.voice,
+                    speech_file_path=f"tmp/chunks/or_{args.model}_{index}.mp3", index=index)
             else:
                 chunk_file_path = openai_tts(txt=chunk, voice=args.voice, index=index)
             audio_chunks.append(chunk_file_path)

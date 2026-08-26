@@ -56,6 +56,41 @@ Run it with google tts (free):
 python -m tts.tts -g sample.txt
 ```
 
+### OpenRouter TTS (many models & voices)
+
+Use any TTS model from OpenRouter's catalog with a single API key. The catalog with models, voices and prices lives in `models/openrouter.json`.
+
+Run with OpenRouter (default model: kokoro, cheap and great for long/English texts):
+
+```shell
+python -m tts.tts -or sample.txt
+```
+
+Pick a different model and voice:
+
+```shell
+# English, cheap ($0.62/M chars):
+python -m tts.tts -or --model kokoro -v af_heart sample.txt
+# Premium Gemini voice (needs PCM->MP3 conversion, handled automatically):
+python -m tts.tts -or --model gemini-flash -v Aoede sample.txt
+# Deepgram (90 voices):
+python -m tts.tts -or --model aura-2 -v aura-2-agustina-es sample.txt
+```
+
+Available models and their voices:
+
+```shell
+python -c "import json,os; d=json.load(open('models/openrouter.json')); [print(m, '->', ', '.join(v['voices'][:6]), '...') for m,v in d.items()]"
+```
+
+Set your key in `.env` (or `~/.openrouter_key`):
+
+```shell
+OPENROUTER_API_KEY=your_key
+```
+
+`-v` still selects the voice; `--model` picks the model. The default stays OpenAI `tts-1` unless you pass `-or`.
+
 List available HuggingFace TTS models:
 
 ```shell
