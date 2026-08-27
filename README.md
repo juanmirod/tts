@@ -66,6 +66,8 @@ Run with OpenRouter (default model: kokoro, cheap and great for long/English tex
 python -m tts.tts -or sample.txt
 ```
 
+Text is automatically chunked at 1500 characters for OpenRouter (other providers chunk at 4000), since OpenRouter rejects larger chunks — long files keep working.
+
 Pick a different model and voice:
 
 ```shell

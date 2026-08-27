@@ -17,6 +17,18 @@ import requests
 
 load_dotenv()
 
+# Max chars per chunk sent to the TTS provider. OpenRouter fails with
+# chunks larger than ~1500 chars, so it uses a smaller limit.
+OPENAI_MAX_CHUNK = 4000
+OPENROUTER_MAX_CHUNK = 1500
+
+
+def get_chunks(text, use_openrouter=False):
+    """Split `text` into chunks sized for the active provider."""
+    max_length = OPENROUTER_MAX_CHUNK if use_openrouter else OPENAI_MAX_CHUNK
+    return chunk_text(text, max_length)
+
+
 def openai_tts(txt, speech_file_path=None, voice='nova', index=0):
     if speech_file_path is None:
         speech_file_path = f"tmp/chunks/tts_{voice}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{index}.mp3"
@@ -184,7 +196,7 @@ def main():
     with open(args.input_file, 'r') as f:
         text = f.read()
     text = parse_markdown(text)
-    chunks = chunk_text(text, max_length=4000)
+    chunks = get_chunks(text, args.openrouter)
     if args.dry_run:
         print(chunks)
     else:
