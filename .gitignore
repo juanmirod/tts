@@ -5,3 +5,4 @@ tmp/chunks/*.mp3
 __pycache__
 pi-session-*.html
 
+*.egg-info/
