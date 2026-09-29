@@ -118,11 +118,17 @@ def _pcm_to_mp3(pcm_bytes, ctype):
     return buf.getvalue()
 
 
+def openrouter_tts_bytes(txt, model=DEFAULT_MODEL, voice=DEFAULT_VOICE):
+    """Genera el audio de `txt` con OpenRouter y devuelve los bytes mp3
+    (sin tocar disco). `txt` debe caber en un chunk (<= 1500 chars)."""
+    return _chunk_bytes(txt, model, resolve_voice(model, voice))
+
+
 def openrouter_tts(txt, speech_file_path, model=DEFAULT_MODEL,
                    voice=DEFAULT_VOICE, index=0):
     """Genera el audio de `txt` con OpenRouter y lo guarda en
     `speech_file_path`. Devuelve la ruta."""
-    data = _chunk_bytes(txt, model, resolve_voice(model, voice))
+    data = openrouter_tts_bytes(txt, model, voice)
     if not speech_file_path:
         from datetime import datetime
         speech_file_path = "tmp/chunks/tts_%s_%s_%d.mp3" % (

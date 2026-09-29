@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tts"
+version = "0.1.0"
+description = "TTS CLI and OpenRouter text-to-speech helpers"
+requires-python = ">=3.10"
+# Only what `tts.openrouter` and `tts.text_parser` need. The CLI (`tts.tts`)
+# still relies on requirements.txt (gtts, openai, huggingface-hub, ...).
+dependencies = [
+    "requests>=2.31.0",
+    "pydub==0.25.1",
+]
+
+[tool.setuptools]
+packages = ["tts"]
