@@ -6,7 +6,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from .text_parser import parse_markdown, chunk_text
 from .models import HuggingFaceModelManager
-from .openrouter import openrouter_tts, model_voices, resolve_voice
+from .openrouter import (openrouter_tts, model_voices, resolve_voice,
+                         supports_style, supports_vocal_tags)
 from huggingface_hub.utils import HfHubHTTPError
 import importlib.util
 import subprocess
@@ -166,7 +167,9 @@ def main():
                         help='Use OpenRouter TTS (any model from models/openrouter.json).')
     parser.add_argument('--model', type=str,
                         default='kokoro',
-                        help='OpenRouter TTS model slug (e.g. kokoro, gemini-flash, aura-2). Defaults to "kokoro".')
+                        help='OpenRouter TTS model slug (e.g. kokoro, gemini-3.8-flash, aura-2). Defaults to "kokoro".')
+    parser.add_argument('--style', type=str,
+                        help='Delivery style for the whole text, e.g. "calm narrator" or "whispering". Only for OpenRouter models that support it (gemini-3.8-flash, gemini-3.8-lite).')
     parser.add_argument('-l', '--language', type=str,
                         default='en',
                         help='The language to use with google tts. Defaults to "en".')
@@ -193,9 +196,15 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    if args.style and not (args.openrouter and supports_style(args.model)):
+        parser.error('--style needs -or and a model that supports it '
+                     '(gemini-3.8-flash, gemini-3.8-lite)')
+
     with open(args.input_file, 'r') as f:
         text = f.read()
-    text = parse_markdown(text)
+    # Expressive models act on inline tags like <sigh>; keep them for those.
+    keep_tags = args.openrouter and supports_vocal_tags(args.model)
+    text = parse_markdown(text, keep_vocal_tags=keep_tags)
     chunks = get_chunks(text, args.openrouter)
     if args.dry_run:
         print(chunks)
@@ -215,7 +224,8 @@ def main():
                 args.voice = resolve_voice(args.model, args.voice)
                 chunk_file_path = openrouter_tts(
                     txt=chunk, model=args.model, voice=args.voice,
-                    speech_file_path=f"tmp/chunks/or_{args.model}_{index}.mp3", index=index)
+                    speech_file_path=f"tmp/chunks/or_{args.model}_{index}.mp3", index=index,
+                    style=args.style)
             else:
                 chunk_file_path = openai_tts(txt=chunk, voice=args.voice, index=index)
             audio_chunks.append(chunk_file_path)

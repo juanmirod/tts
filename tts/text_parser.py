@@ -1,8 +1,62 @@
 import re
 
+# Inline vocal tags understood by expressive TTS models (e.g. Gemini 3.8):
+# lowercase words such as <sigh>, <laughs softly> or <short pause>.
+VOCAL_TAG = re.compile(r'<([a-z]+)(?:[ -][a-z]+)*>')
 
-def parse_markdown(markdown):
-    """Removes the frontmatter and html from a markdown string."""
+# Tags with these names are HTML, never vocal tags, so they are always stripped.
+HTML_ELEMENTS = {
+    'a', 'abbr', 'address', 'area', 'article', 'aside', 'audio', 'b', 'base',
+    'bdi', 'bdo', 'big', 'blockquote', 'body', 'br', 'button', 'canvas',
+    'caption', 'center', 'cite', 'code', 'col', 'colgroup', 'data',
+    'datalist', 'dd', 'del', 'details', 'dfn', 'dialog', 'div', 'dl', 'dt',
+    'em', 'embed', 'fieldset', 'figcaption', 'figure', 'font', 'footer',
+    'form', 'g', 'head', 'header', 'hgroup', 'hr', 'html', 'i', 'iframe',
+    'img', 'input', 'ins', 'kbd', 'label', 'legend', 'li', 'link', 'main',
+    'map', 'mark', 'menu', 'meta', 'meter', 'nav', 'noscript', 'object', 'ol',
+    'optgroup', 'option', 'output', 'p', 'param', 'path', 'picture', 'pre',
+    'progress', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'script', 'search',
+    'section', 'select', 'slot', 'small', 'source', 'span', 'strike',
+    'strong', 'style', 'sub', 'summary', 'sup', 'svg', 'table', 'tbody', 'td',
+    'template', 'textarea', 'tfoot', 'th', 'thead', 'time', 'title', 'tr',
+    'track', 'tt', 'u', 'ul', 'var', 'video', 'wbr',
+}
+
+
+def _stash_vocal_tags(text):
+    """Swaps vocal tags for placeholders so the markdown/HTML cleanup below
+    can't strip or mangle them. Returns (text, tags)."""
+    tags = []
+
+    def stash(match):
+        if match.group(1) in HTML_ELEMENTS:
+            return match.group(0)
+        tags.append(match.group(0))
+        return '\x00%d\x00' % (len(tags) - 1)
+
+    return VOCAL_TAG.sub(stash, text), tags
+
+
+def _restore_vocal_tags(text, tags):
+    return re.sub(r'\x00(\d+)\x00', lambda m: tags[int(m.group(1))], text)
+
+
+def strip_vocal_tags(text):
+    """Removes inline vocal tags (and the spaces before them), for models
+    that would read them aloud. HTML-looking tags are left alone."""
+    def drop(match):
+        return match.group(0) if match.group(2) in HTML_ELEMENTS else ''
+
+    return re.sub(r'[ \t]*(' + VOCAL_TAG.pattern + ')', drop, text)
+
+
+def parse_markdown(markdown, keep_vocal_tags=False):
+    """Removes the frontmatter and html from a markdown string. With
+    keep_vocal_tags, inline vocal tags like <sigh> survive (HTML doesn't)."""
+    tags = []
+    if keep_vocal_tags:
+        markdown, tags = _stash_vocal_tags(markdown)
+
     patterns_without_group = [
         r'---.*---',          # Frontmatter
         r'<figure>.*<\/figure>',  # Figures
@@ -37,6 +91,8 @@ def parse_markdown(markdown):
 
     # Strip leading and trailing whitespace
     text = text.strip()
+    if tags:
+        text = _restore_vocal_tags(text, tags)
     return text
 
 

@@ -53,6 +53,18 @@ def model_voices(model):
     return info.get("voices", [])
 
 
+def supports_style(model):
+    """True si el modelo acepta un estilo de locución (--style). El catálogo
+    indica en `style_provider` el proveedor de OpenRouter al que va."""
+    return bool((load_or_models().get(model) or {}).get("style_provider"))
+
+
+def supports_vocal_tags(model):
+    """True si el modelo interpreta etiquetas inline como <sigh> o
+    <short pause> (Gemini 3.8), así que no hay que borrarlas del texto."""
+    return bool((load_or_models().get(model) or {}).get("vocal_tags"))
+
+
 def resolve_voice(model, voice, default=None):
     """Comprueba que la voz existe para el modelo. Si el usuario no la
     especifico (o la que dio no es valida), usa la default del modelo
@@ -70,8 +82,9 @@ def resolve_voice(model, voice, default=None):
     return voice or default
 
 
-def _chunk_bytes(chunk, model, voice):
-    """POST a OpenRouter /audio/speech. Devuelve bytes mp3."""
+def _chunk_bytes(chunk, model, voice, style=None):
+    """POST a OpenRouter /audio/speech. Devuelve bytes mp3. `style` es el
+    estilo de locución (p.ej. "whispering") para modelos que lo soportan."""
     out_mod = load_or_models().get(model) or {}
     fmt = out_mod.get("format", "mp3")
     body = {
@@ -80,6 +93,13 @@ def _chunk_bytes(chunk, model, voice):
         "voice": voice,
         "response_format": fmt,
     }
+    if style:
+        slug = out_mod.get("style_provider")
+        if not slug:
+            raise RuntimeError("El modelo %s no soporta --style" % model)
+        body["provider"] = {
+            "options": {slug: {"speech_metadata": {"style": style}}}
+        }
     key = or_api_key()
     if not key:
         raise RuntimeError(
@@ -118,17 +138,18 @@ def _pcm_to_mp3(pcm_bytes, ctype):
     return buf.getvalue()
 
 
-def openrouter_tts_bytes(txt, model=DEFAULT_MODEL, voice=DEFAULT_VOICE):
+def openrouter_tts_bytes(txt, model=DEFAULT_MODEL, voice=DEFAULT_VOICE,
+                         style=None):
     """Genera el audio de `txt` con OpenRouter y devuelve los bytes mp3
     (sin tocar disco). `txt` debe caber en un chunk (<= 1500 chars)."""
-    return _chunk_bytes(txt, model, resolve_voice(model, voice))
+    return _chunk_bytes(txt, model, resolve_voice(model, voice), style=style)
 
 
 def openrouter_tts(txt, speech_file_path, model=DEFAULT_MODEL,
-                   voice=DEFAULT_VOICE, index=0):
+                   voice=DEFAULT_VOICE, index=0, style=None):
     """Genera el audio de `txt` con OpenRouter y lo guarda en
     `speech_file_path`. Devuelve la ruta."""
-    data = openrouter_tts_bytes(txt, model, voice)
+    data = openrouter_tts_bytes(txt, model, voice, style=style)
     if not speech_file_path:
         from datetime import datetime
         speech_file_path = "tmp/chunks/tts_%s_%s_%d.mp3" % (

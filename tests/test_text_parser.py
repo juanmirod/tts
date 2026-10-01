@@ -1,6 +1,6 @@
 """Tests for text chunking (tts/text_parser.py)."""
 
-from tts.text_parser import chunk_text
+from tts.text_parser import chunk_text, parse_markdown, strip_vocal_tags
 
 
 class TestChunkText:
@@ -49,3 +49,42 @@ class TestChunkText:
     def test_default_4000_limit_still_works(self):
         chunks = chunk_text("a" * 4500, 4000)
         assert chunks == ["a" * 4000, "a" * 500]
+
+
+class TestVocalTags:
+    """parse_markdown keeps inline vocal tags only when asked to."""
+
+    TEXT = "I have a secret. <short pause> Nobody knows. <sigh> Really."
+
+    def test_tags_stripped_by_default(self):
+        assert parse_markdown(self.TEXT) == "I have a secret. Nobody knows. Really."
+
+    def test_tags_kept_and_spacing_intact(self):
+        # The blockquote rule (`> +`) must not eat the space after a tag.
+        assert parse_markdown(self.TEXT, keep_vocal_tags=True) == self.TEXT
+
+    def test_html_still_stripped_when_keeping_tags(self):
+        text = '<p class="x">Hi <b>there</b><br/> <laughs softly> ok</p>'
+        assert parse_markdown(text, keep_vocal_tags=True) == "Hi there <laughs softly> ok"
+
+    def test_markdown_still_cleaned_around_tags(self):
+        text = "# Title\n**Bold** <gasp> and *italic*\n> quote <long pause>"
+        assert parse_markdown(text, keep_vocal_tags=True) == \
+            "Title\nBold <gasp> and italic\nquote <long pause>"
+
+    def test_non_vocal_angle_brackets_still_stripped(self):
+        text = "See <https://example.com> and <T> types <sigh>"
+        assert parse_markdown(text, keep_vocal_tags=True) == "See and types <sigh>"
+
+
+class TestStripVocalTags:
+    def test_removes_tags_and_the_space_before_them(self):
+        assert strip_vocal_tags("Great job! <laugh> You got it. <short pause>") == \
+            "Great job! You got it."
+
+    def test_leading_tag_leaves_text_intact(self):
+        assert strip_vocal_tags("<gasp> Wow, really?") == " Wow, really?"
+
+    def test_html_and_plain_text_untouched(self):
+        text = "a < b and <b>bold</b> stay"
+        assert strip_vocal_tags(text) == text

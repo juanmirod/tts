@@ -74,10 +74,24 @@ Pick a different model and voice:
 # English, cheap ($0.62/M chars):
 python -m tts.tts -or --model kokoro -v af_heart sample.txt
 # Premium Gemini voice (needs PCM->MP3 conversion, handled automatically):
-python -m tts.tts -or --model gemini-flash -v Aoede sample.txt
+python -m tts.tts -or --model gemini-3.8-flash -v Aoede sample.txt
+# Cheaper Gemini 3.8 tier (~$0.69/hour of audio vs ~$1.04 for flash):
+python -m tts.tts -or --model gemini-3.8-lite -v Kore sample.txt
 # Deepgram (90 voices):
 python -m tts.tts -or --model aura-2 -v aura-2-agustina-es sample.txt
 ```
+
+Gemini 3.8 models (`gemini-3.8-flash`, `gemini-3.8-lite`) also take a delivery style for the whole text, and act on inline vocal tags written in the input (for other models the tags are stripped like HTML):
+
+```shell
+python -m tts.tts -or --model gemini-3.8-flash -v Kore --style "calm, warm narrator" story.md
+```
+
+```markdown
+I have a secret to tell you. <short pause> Nobody knows. <sigh>
+```
+
+Useful tags: `<laugh>`, `<sigh>`, `<gasp>`, `<cough>`, `<breath>`, `<short pause>`, `<long pause>`. `--style` is applied to every chunk; models without style support reject it.
 
 Available models and their voices:
 
