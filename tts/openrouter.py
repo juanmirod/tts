@@ -23,6 +23,8 @@ OR_API = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "kokoro"
 # Voz inglesa por defecto de kokoro (recomendada en tts_bot).
 DEFAULT_VOICE = "af_heart"
+# Segundos de espera por chunk. Generoso para el CLI; readbuddy usa menos.
+DEFAULT_TIMEOUT = 120
 
 
 def load_or_models():
@@ -82,9 +84,12 @@ def resolve_voice(model, voice, default=None):
     return voice or default
 
 
-def _chunk_bytes(chunk, model, voice, style=None):
+def _chunk_bytes(chunk, model, voice, style=None, timeout=DEFAULT_TIMEOUT,
+                 retries=0):
     """POST a OpenRouter /audio/speech. Devuelve bytes mp3. `style` es el
-    estilo de locución (p.ej. "whispering") para modelos que lo soportan."""
+    estilo de locución (p.ej. "whispering") para modelos que lo soportan.
+    Un timeout o fallo de conexión se reintenta `retries` veces (a veces el
+    proveedor se cuelga y no responde); un error HTTP no se reintenta."""
     out_mod = load_or_models().get(model) or {}
     fmt = out_mod.get("format", "mp3")
     body = {
@@ -107,7 +112,14 @@ def _chunk_bytes(chunk, model, voice, style=None):
             "(env o ~/.openrouter_key)"
         )
     headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
-    r = requests.post(OR_API + "/audio/speech", json=body, headers=headers, timeout=120)
+    for attempt in range(retries + 1):
+        try:
+            r = requests.post(OR_API + "/audio/speech", json=body,
+                              headers=headers, timeout=timeout)
+            break
+        except (requests.Timeout, requests.ConnectionError):
+            if attempt == retries:
+                raise
     if r.status_code != 200:
         raise RuntimeError(
             "OpenRouter TTS HTTP %d: %s" % (r.status_code, r.text[:300])
@@ -139,10 +151,12 @@ def _pcm_to_mp3(pcm_bytes, ctype):
 
 
 def openrouter_tts_bytes(txt, model=DEFAULT_MODEL, voice=DEFAULT_VOICE,
-                         style=None):
+                         style=None, timeout=DEFAULT_TIMEOUT, retries=0):
     """Genera el audio de `txt` con OpenRouter y devuelve los bytes mp3
-    (sin tocar disco). `txt` debe caber en un chunk (<= 1500 chars)."""
-    return _chunk_bytes(txt, model, resolve_voice(model, voice), style=style)
+    (sin tocar disco). `txt` debe caber en un chunk (<= 1500 chars).
+    `timeout` (segundos) y `retries`: ver _chunk_bytes."""
+    return _chunk_bytes(txt, model, resolve_voice(model, voice), style=style,
+                        timeout=timeout, retries=retries)
 
 
 def openrouter_tts(txt, speech_file_path, model=DEFAULT_MODEL,
