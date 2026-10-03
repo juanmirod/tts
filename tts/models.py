@@ -71,8 +71,9 @@ class HuggingFaceModelManager:
                 "likes": model.likes or 0,
                 "pipeline_tag": model.pipeline_tag or "",
             }
-            if model.description:
-                model_info["description"] = model.description
+            description = getattr(model, "description", None)
+            if description:
+                model_info["description"] = description
             result.append(model_info)
 
         return result
@@ -117,8 +118,9 @@ class HuggingFaceModelManager:
                     "likes": model.likes or 0,
                     "pipeline_tag": model.pipeline_tag or "",
                 }
-                if model.description:
-                    model_info["description"] = model.description
+                description = getattr(model, "description", None)
+                if description:
+                    model_info["description"] = description
                 result.append(model_info)
 
         return result

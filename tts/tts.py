@@ -8,6 +8,7 @@ from .text_parser import parse_markdown, chunk_text
 from .models import HuggingFaceModelManager
 from .openrouter import (openrouter_tts, model_voices, resolve_voice,
                          supports_style, supports_vocal_tags)
+from . import qwen
 from huggingface_hub.utils import HfHubHTTPError
 import importlib.util
 import subprocess
@@ -19,14 +20,24 @@ import requests
 load_dotenv()
 
 # Max chars per chunk sent to the TTS provider. OpenRouter fails with
-# chunks larger than ~1500 chars, so it uses a smaller limit.
+# chunks larger than ~1500 chars, so it uses a smaller limit. Local Qwen3-TTS
+# needs ~5 MB of GPU memory per char on top of the 2 GB model, so 120 is safe
+# on a 4 GB GPU; raise it with --max-chars on a bigger one.
 OPENAI_MAX_CHUNK = 4000
 OPENROUTER_MAX_CHUNK = 1500
+QWEN_MAX_CHUNK = 120
 
 
-def get_chunks(text, use_openrouter=False):
-    """Split `text` into chunks sized for the active provider."""
-    max_length = OPENROUTER_MAX_CHUNK if use_openrouter else OPENAI_MAX_CHUNK
+def get_chunks(text, use_openrouter=False, use_qwen=False, max_length=None):
+    """Split `text` into chunks sized for the active provider (or at most
+    `max_length` chars when given)."""
+    if not max_length:
+        if use_qwen:
+            max_length = QWEN_MAX_CHUNK
+        elif use_openrouter:
+            max_length = OPENROUTER_MAX_CHUNK
+        else:
+            max_length = OPENAI_MAX_CHUNK
     return chunk_text(text, max_length)
 
 
@@ -119,10 +130,10 @@ def list_hf_models(query=None, limit=20):
             print(table)
             print(f"\nFound {len(models)} model(s).")
             print(f"\nTo use a model, run:")
-            print(f"  python -m tts.tts -hf --hf-model <model_id> <input_file>")
+            print(f"  python -m tts.tts --local-model --model-name <model_id> <input_file>")
             print(f"\nExample:")
             if models:
-                print(f"  python -m tts.tts -hf --hf-model {models[0]['id']} sample.txt")
+                print(f"  python -m tts.tts --local-model --model-name {models[0]['id']} sample.txt")
         else:
             print("No TTS models found.")
             if query:
@@ -170,9 +181,16 @@ def main():
                         help='OpenRouter TTS model slug (e.g. kokoro, gemini-3.8-flash, aura-2). Defaults to "kokoro".')
     parser.add_argument('--style', type=str,
                         help='Delivery style for the whole text, e.g. "calm narrator" or "whispering". Only for OpenRouter models that support it (gemini-3.8-flash, gemini-3.8-lite).')
+    parser.add_argument('--qwen', action='store_true',
+                        help='Use Qwen3-TTS locally (needs `pip install qwen-tts`). -v picks the speaker (Ryan, Aiden, Vivian, Serena, Uncle_Fu, Dylan, Eric, Ono_Anna, Sohee), -l the language.')
+    parser.add_argument('--max-chars', type=int, metavar='N',
+                        help='Max characters per chunk, overriding the provider default (4000 OpenAI/Google, 1500 OpenRouter, 120 Qwen).')
+    parser.add_argument('--qwen-model', type=str,
+                        default=qwen.DEFAULT_MODEL,
+                        help='Qwen3-TTS CustomVoice model. Defaults to "%(default)s".')
     parser.add_argument('-l', '--language', type=str,
                         default='en',
-                        help='The language to use with google tts. Defaults to "en".')
+                        help='The language to use with google tts and Qwen3-TTS (en, es, fr, de, it, pt, ru, zh, ja, ko). Defaults to "en".')
     parser.add_argument('--local-model', action='store_true',
                       help='Use a local HuggingFace model for TTS.')
     parser.add_argument('--model-name', type=str,
@@ -205,17 +223,21 @@ def main():
     # Expressive models act on inline tags like <sigh>; keep them for those.
     keep_tags = args.openrouter and supports_vocal_tags(args.model)
     text = parse_markdown(text, keep_vocal_tags=keep_tags)
-    chunks = get_chunks(text, args.openrouter)
+    chunks = get_chunks(text, args.openrouter, args.qwen, args.max_chars)
     if args.dry_run:
         print(chunks)
     else:
         index = 0
         audio_chunks = []
-        args.output = args.output.replace(".mp3", f"_{args.voice}.mp3")
         for chunk in chunks:
             print(f"Processing chunk {index} of {len(chunks)}, please wait...")
             if args.local_model:
                 chunk_file_path = local_tts(chunk, args.model_name, index)
+            elif args.qwen:
+                args.voice = qwen.resolve_speaker(args.voice)
+                chunk_file_path = qwen.qwen_tts(
+                    chunk, model_name=args.qwen_model, voice=args.voice,
+                    language=args.language, index=index)
             elif args.google_tts:
                 if args.voice == 'nova':
                     args.voice = 'co.uk'
@@ -230,6 +252,10 @@ def main():
                 chunk_file_path = openai_tts(txt=chunk, voice=args.voice, index=index)
             audio_chunks.append(chunk_file_path)
             index += 1
+        if not args.local_model:
+            # The voice is only final here (resolved/defaulted per provider);
+            # local models have no voice, so no suffix.
+            args.output = args.output.replace(".mp3", f"_{args.voice}.mp3")
         combine_chunks(audio_chunks, args.output)
         print(f"Done. Output file: {args.output}")
 

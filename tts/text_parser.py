@@ -96,13 +96,12 @@ def parse_markdown(markdown, keep_vocal_tags=False):
     return text
 
 
-def _split_long_paragraph(paragraph, max_length):
-    """Hard-splits a single paragraph longer than max_length on word
-    boundaries so no piece exceeds max_length (absurdly long words are
-    cut to fit). Returns pieces that re-join with ' ' to the original."""
+def _split_words(text, max_length):
+    """Hard-splits text on word boundaries so no piece exceeds max_length
+    (absurdly long words are cut to fit)."""
     pieces = []
     current = ""
-    for word in paragraph.split(' '):
+    for word in text.split(' '):
         if not current:
             current = word
         elif len(current) + 1 + len(word) <= max_length:
@@ -121,6 +120,31 @@ def _split_long_paragraph(paragraph, max_length):
         else:
             result.append(piece)
     return result
+
+
+def _split_long_paragraph(paragraph, max_length):
+    """Splits a single paragraph longer than max_length into pieces of at
+    most max_length chars. Pieces end at sentence boundaries when possible;
+    a sentence that is longer than the limit by itself is split on word
+    boundaries."""
+    pieces = []
+    current = ""
+    for sentence in re.split(r'(?<=[.!?])\s+', paragraph):
+        if len(sentence) > max_length:
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.extend(_split_words(sentence, max_length))
+        elif not current:
+            current = sentence
+        elif len(current) + 1 + len(sentence) <= max_length:
+            current += ' ' + sentence
+        else:
+            pieces.append(current)
+            current = sentence
+    if current:
+        pieces.append(current)
+    return pieces
 
 
 def chunk_text(text, max_length):

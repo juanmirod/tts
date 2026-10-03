@@ -30,6 +30,17 @@ class TestHuggingFaceModelManager:
         model.description = None
         return model
 
+    def test_models_without_description_attribute(self):
+        """Real ModelInfo objects have no `description` attribute at all."""
+        from types import SimpleNamespace
+        model = SimpleNamespace(modelId="facebook/mms-tts-eng", downloads=1,
+                                likes=2, pipeline_tag="text-to-speech")
+        with patch("tts.models.HfApi") as MockHfApi:
+            MockHfApi.return_value.list_models.return_value = [model]
+            manager = HuggingFaceModelManager()
+            assert "description" not in manager.list_tts_models(limit=1)[0]
+            assert "description" not in manager.search_models("eng")[0]
+
     def test_list_tts_models(self, mock_hf_model, mock_hf_model_no_desc):
         """Test that list_tts_models returns correctly formatted model data."""
         with patch("tts.models.HfApi") as MockHfApi:
